@@ -12,7 +12,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 - Build web first, Android later. Preserve the domain/storage boundary.
 - The user's dark screenshot in docs/qa/reference.png is the current visual source, ahead of the earlier purple Figma screens.
-- Keep the MVP small: create, once-daily check-in, undo today, goal progress, confirmed deletion.
+- Keep the MVP small: create, independent numbered completion toggles, goal progress, confirmed deletion. The 2026-10-19 UX update replaces the old once-daily restriction: any number can be toggled at any time, including multiple marks in one day.
 - Use a friendly, mildly teasing Russian tone. Missed days never reset progress.
 - No icon picker or account screen in v0.1. Supabase sync is the next milestone; hosting/domain come last.
 - Do not display cloud-save success before actual Supabase integration.
@@ -20,3 +20,5 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Free preview hosting target: GitHub Pages from main via .github/workflows/deploy-pages.yml. Keep asset URLs relative so the app works under /habbitsAtom/ and locally. A custom hosting/domain setup remains a later option.
 - Branch policy: main is the published version; test holds new features and UX corrections. Work on test by default for the current iteration. Switch branches when the user asks (for example, "переключись на тест" or "переключись на main"). Only merge changes into main and publish them when the user explicitly requests publication or promotion. Preserve uncommitted work when switching; never reset or discard it.
 - Test branch CI builds and tests the app without deployment. The deploy job must be guarded by github.ref == 'refs/heads/main', including manually dispatched runs.
+- Numbered step UX: clicking a number replaces it with the user's supplied public/assets/icon-habbit.svg and shows exactly "Дело сделано!". Clicking a completed step undoes only that step. The leading lightning symbol remains decorative, as in the reference. Maintain exact step identities when saving, reloading and undoing.
+- Storage schema 2 adds completion.step while retaining the existing localStorage key. Read schema 1 records without overwriting them; map old completions to steps 1..N, preserve IDs, dates and the legacy outbox, and persist schema 2 with the next successful edit. New outbox events declare schemaVersion: 2; future sync must handle retained legacy events explicitly.

@@ -2,6 +2,24 @@
 
 final result: passed
 
+## Current test iteration — independently clickable numbers
+
+Result: passed. Scope: the new numbered-step interaction in branch `test`; the published `main` behavior is not promoted by this change.
+
+Source visual: `docs/qa/steps-reference.png` (1101 × 819), the user's new screenshot. Exact icon source: `public/assets/icon-habbit.svg`, copied byte-for-byte from the supplied file; SHA-256 matches `6C86951A89A6DBE4C3FD012173432E987A28B6E2DA5919533CD391A703B26A09`.
+
+Final implementation: `docs/qa/steps-desktop.png` (1467 × 728 pixels at CSS viewport 1467 × 728), `docs/qa/steps-mobile.png` (390 × 844 pixels at CSS viewport 390 × 844). Desktop state: four source-named habits, steps 1 and 2 selected in the first row, remaining rows unselected. The functional counter is 2 of 40; the reference's static 0 of 40 is intentionally corrected.
+
+Full four-row comparison: `docs/qa/steps-overview-comparison.png` puts the source content region above the same implementation content region. The screenshot is an enlarged crop rather than a complete app frame, so its 1032 × 430 content region is normalized to 688 × 287 (about 2/3 scale, matching its roughly 70 px circles to the app's 47–48 px circles). The implementation region is cropped at native density to 688 × 287; surrounding existing sidebar/header/footer are checked separately in the complete app capture. Focused first-row comparison: `docs/qa/steps-comparison.png`, source above implementation. No mobile source is supplied; mobile remains the existing responsive adaptation.
+
+Fidelity surfaces: existing Inter typography and row/column rhythm retained; dark surfaces and legible inactive numerals retained; selected circles use the supplied SVG's exact #FFCA58 rather than recoloring it. The new icon path is intentionally taken from the explicit SVG rather than approximated from the screenshot. Source placeholder repeated sixes remain sequential functional numbers. Copy now describes unlimited independent marks; the success text is exactly «Дело сделано!». Empty-screen coin, branding and unrelated form controls retain their prior assets.
+
+P2 found during comparison: the native horizontal scrollbar raised the step row above its leading icon. Hid that scrollbar while preserving horizontal scrolling, keyboard focus and swipe; normalized top/bottom padding. Final DOM measurement reports both symbol and first-step center at y=144 CSS px. Post-fix full and focused captures were compared; no actionable P0/P1/P2 visual findings remain. Minor source-font/glyph differences remain accepted P3, as in the original implementation.
+
+Browser checks: create; mark 1, 2 and 5 in the same day; preserve exact selected numbers after reload; undo only 5; toggle 8 with Enter/Space; finish a two-step goal in one day and reopen it by undo; mobile click/undo; repeated identical success messages; console errors checked (none). With the local server stopped, reload succeeds, a new numbered mark and its supplied SVG render, the mark survives another reload, and it can be undone. Mobile document width does not exceed its viewport. The preview remains open at http://127.0.0.1:4175/ with demonstration habits.
+
+Data checks: all 13 domain/offline tests passed, including v1→v2 migration without write-on-read, preservation of legacy IDs/dates/outbox, exact step persistence, duplicate protection, unrestricted same-day marks, goal completion/undo and storage-failure atomicity. After the layout-only correction, the production build and generated-worker test passed again. Schema migration is one-way for the current test implementation; its separate local origin keeps it apart from the older main version. Cloud synchronization remains out of scope.
+
 ## Scoped update — empty-screen coin
 
 User annotation requested replacing only the illustration above the empty-screen text with their supplied 3D coin. Source: `C:/Users/Admin/Desktop/04d1b9d1069ba52e75baea4d87d0860b0cb3b495.png`. The asset's transparent outer margins were trimmed for web packaging; the coin itself was preserved. Implemented asset: `public/assets/empty-coin.png`.

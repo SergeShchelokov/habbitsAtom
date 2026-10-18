@@ -173,46 +173,27 @@ main {
   gap: 9px;
   min-width: 0;
 }
-.today-button {
+.habit-symbol {
   width: 48px;
   height: 48px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--yellow);
-  color: #343039;
-  display: grid;
-  place-items: center;
+  display: block;
+  object-fit: contain;
   flex-shrink: 0;
-  transition:
-    transform 0.15s,
-    background 0.15s;
-}
-.today-button:hover {
-  transform: scale(1.08);
-  background: #ffe28b;
-}
-.today-button.done-today {
-  background: #f7d36226;
-  color: var(--yellow);
-  border: 1px solid #f7d3626b;
-}
-.today-button.done-today:hover {
-  background: #f7d36240;
 }
 .habit-track {
   display: flex;
   gap: 9px;
   overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  padding: 5px 0 9px;
+  scrollbar-width: none;
+  padding: 5px 0;
   min-width: 0;
 }
-.habit-track:hover,
-.habit-track:focus-visible {
-  scrollbar-color: #5c535e transparent;
+.habit-track::-webkit-scrollbar {
+  display: none;
 }
 .step {
+  border: 0;
+  padding: 0;
   width: 47px;
   height: 47px;
   flex: 0 0 47px;
@@ -224,10 +205,27 @@ main {
   font-size: 25px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+.step:hover:not(:disabled) {
+  background: #353039;
 }
 .step-completed {
-  background: var(--yellow);
-  color: #373039;
+  background: transparent;
+}
+.step-completed:hover:not(:disabled) {
+  background: transparent;
+  transform: scale(1.04);
+}
+.step img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
 .row-actions {
   display: flex;
@@ -260,9 +258,6 @@ main {
 }
 .delete-button:hover {
   color: #ffacac;
-}
-.undo-button {
-  color: #b7a56c;
 }
 .done-copy {
   font-size: 11px;
@@ -592,12 +587,9 @@ form > input {
     flex-basis: 41px;
     font-size: 21px;
   }
-  .today-button {
+  .habit-symbol {
     height: 43px;
     width: 43px;
-  }
-  .today-button svg {
-    width: 29px;
   }
   .habit-progress,
   .habit-track {
@@ -708,13 +700,10 @@ form > input {
     flex-direction: row-reverse;
     justify-content: flex-start;
   }
-  .undo-button {
-    display: none;
-  }
   .delete-button {
     opacity: 0.85;
   }
-  .today-button {
+  .habit-symbol {
     width: 44px;
     height: 44px;
   }

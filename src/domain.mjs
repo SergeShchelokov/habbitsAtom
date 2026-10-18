@@ -1,9 +1,10 @@
+// Keep the original key so existing users retain their data during migration.
 export const STORAGE_KEY = "habbits-atom:v1";
 export class HabitError extends Error {}
 export const dayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export const createDocument = (uuid = () => crypto.randomUUID()) => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   revision: 0,
   workspaceId: uuid(),
   deviceId: uuid(),
@@ -28,7 +29,7 @@ export function readDocument(storage) {
   const ids = new Set();
   if (
     !doc ||
-    doc.schemaVersion !== 1 ||
+    ![1, 2].includes(doc.schemaVersion) ||
     !Number.isInteger(doc.revision) ||
     doc.revision < 0 ||
     typeof doc.workspaceId !== "string" ||
@@ -55,13 +56,37 @@ export function readDocument(storage) {
       habit.completions.some(
         (item) => !item || !validDay(item.day) || typeof item.id !== "string",
       ) ||
-      new Set(habit.completions.map((item) => item.day)).size !==
+      new Set(habit.completions.map((item) => item.id)).size !==
         habit.completions.length
     )
       throw new HabitError(
         "В локальных данных есть ошибка. Исходная копия сохранена.",
       );
+    const steps = habit.completions.map((item, index) =>
+      doc.schemaVersion === 1 ? index + 1 : item.step,
+    );
+    if (
+      steps.some(
+        (step) => !Number.isInteger(step) || step < 1 || step > habit.target,
+      ) ||
+      new Set(steps).size !== steps.length ||
+      (doc.schemaVersion === 1 &&
+        new Set(habit.completions.map((item) => item.day)).size !==
+          habit.completions.length)
+    )
+      throw new HabitError(
+        "В локальных данных есть ошибка. Исходная копия сохранена.",
+      );
     ids.add(habit.id);
+  }
+  if (doc.schemaVersion === 1) {
+    doc.schemaVersion = 2;
+    for (const habit of doc.habits) {
+      habit.completions = habit.completions.map((item, index) => ({
+        ...item,
+        step: index + 1,
+      }));
+    }
   }
   return doc;
 }
@@ -96,21 +121,44 @@ export function applyCommand(
       (item) => item.id === command.habitId && !item.deletedAt,
     );
     if (!habit) throw new HabitError("Эта привычка уже удалена.");
+    if (
+      command.type === "completion.added" ||
+      command.type === "completion.removed"
+    ) {
+      if (
+        !Number.isInteger(command.step) ||
+        command.step < 1 ||
+        command.step > habit.target
+      )
+        throw new HabitError("Выбери существующий номер выполнения.");
+    }
     if (command.type === "completion.added") {
-      if (habit.completions.some((item) => item.day === day))
-        throw new HabitError("На сегодня уже всё. Продолжим завтра.");
+      if (habit.completions.some((item) => item.step === command.step))
+        throw new HabitError("Эта отметка уже есть.");
       if (habit.completions.length >= habit.target)
         throw new HabitError("Цель уже достигнута!");
-      const completion = { id: uuid(), day, createdAt: timestamp };
+      const completion = {
+        id: uuid(),
+        step: command.step,
+        day,
+        createdAt: timestamp,
+      };
       habit.completions.push(completion);
       payload = { habitId: habit.id, completion };
     } else if (command.type === "completion.removed") {
-      const completion = habit.completions.find((item) => item.day === day);
-      if (!completion) throw new HabitError("Сегодняшней отметки пока нет.");
+      const completion = habit.completions.find(
+        (item) => item.step === command.step,
+      );
+      if (!completion) throw new HabitError("Этой отметки пока нет.");
       habit.completions = habit.completions.filter(
         (item) => item.id !== completion.id,
       );
-      payload = { habitId: habit.id, completionId: completion.id, day };
+      payload = {
+        habitId: habit.id,
+        completionId: completion.id,
+        step: completion.step,
+        day: completion.day,
+      };
     } else if (command.type === "habit.deleted") {
       habit.deletedAt = timestamp;
       payload = { habitId: habit.id, deletedAt: timestamp };
@@ -119,6 +167,7 @@ export function applyCommand(
   }
   next.revision++;
   next.outbox.push({
+    schemaVersion: 2,
     id: uuid(),
     workspaceId: doc.workspaceId,
     deviceId: doc.deviceId,

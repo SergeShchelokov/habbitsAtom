@@ -5,7 +5,6 @@ import {
   Check,
   X,
   Trash,
-  ArrowCounterClockwise,
   WifiSlash,
   HardDrives,
   ArrowRight,
@@ -13,7 +12,6 @@ import {
 import {
   STORAGE_KEY,
   HabitError,
-  dayKey,
   readDocument,
   persistCommand,
 } from "./domain.mjs";
@@ -117,8 +115,8 @@ function CreateHabit({ onClose, onCreate }) {
           <span>раз</span>
         </div>
         <p className="field-hint">
-          Одна отметка в день. Пропустишь день —<br className="desktop-break" />{" "}
-          прогресс останется. Без драмы.
+          Нажимай на числа, когда дело сделано.
+          <br className="desktop-break" /> Сколько раз в день — решать тебе.
         </p>
         {error && (
           <p role="alert" className="form-error">
@@ -134,25 +132,10 @@ function CreateHabit({ onClose, onCreate }) {
   );
 }
 
-function HabitRow({ habit, today, onCommand, onDelete, busy }) {
+function HabitRow({ habit, onCommand, onDelete, busy }) {
   const count = habit.completions.length;
-  const doneToday = habit.completions.some((item) => item.day === today);
   const complete = count === habit.target;
-  const trackRef = useRef(null);
-  useEffect(() => {
-    const track = trackRef.current;
-    const step = track?.querySelector(`[data-step="${count}"]`);
-    if (step) {
-      const right =
-        step.getBoundingClientRect().right -
-        track.getBoundingClientRect().left +
-        track.scrollLeft;
-      track.scrollTo({
-        left: Math.max(0, right - track.clientWidth + 8),
-        behavior: "smooth",
-      });
-    }
-  }, [count]);
+  const completedSteps = new Set(habit.completions.map((item) => item.step));
   return (
     <article
       className={`habit-row ${complete ? "is-complete" : ""}`}
@@ -167,63 +150,54 @@ function HabitRow({ habit, today, onCommand, onDelete, busy }) {
         {complete && <p className="done-copy">Готово. А ты сомневался.</p>}
       </div>
       <div className="habit-progress">
-        <button
-          className={`today-button ${doneToday ? "done-today" : ""}`}
-          title={
-            doneToday
-              ? "Отменить отметку за сегодня"
-              : complete
-                ? "Цель достигнута"
-                : "Выполнить сегодня"
-          }
-          aria-label={`${doneToday ? "Отменить отметку за сегодня" : complete ? "Цель достигнута" : "Выполнить сегодня"}: ${habit.name}`}
-          disabled={busy || (complete && !doneToday)}
-          onClick={() =>
-            onCommand({
-              type: doneToday ? "completion.removed" : "completion.added",
-              habitId: habit.id,
-            })
-          }
-        >
-          {doneToday ? (
-            <Check size={28} weight="bold" />
-          ) : (
-            <Lightning size={34} weight="fill" />
-          )}
-        </button>
+        <img
+          className="habit-symbol"
+          src="./assets/icon-habbit.svg"
+          alt=""
+          aria-hidden="true"
+        />
         <div
           className="habit-track"
-          ref={trackRef}
           tabIndex={0}
           role="group"
           aria-label={`Прогресс: ${count} из ${habit.target}. Цепочку можно прокрутить.`}
         >
-          {Array.from({ length: habit.target }, (_, i) => (
-            <span
-              key={i}
-              data-step={i + 1}
-              className={`step ${i < count ? "step-completed" : ""}`}
-              aria-label={`${i + 1}: ${i < count ? "выполнено" : "впереди"}`}
-            >
-              {i + 1}
-            </span>
-          ))}
+          {Array.from({ length: habit.target }, (_, i) => {
+            const step = i + 1;
+            const done = completedSteps.has(step);
+            return (
+              <button
+                key={step}
+                type="button"
+                data-step={step}
+                className={`step ${done ? "step-completed" : ""}`}
+                aria-pressed={done}
+                aria-label={`${done ? "Отменить отметку" : "Выполнить"} ${step}: ${habit.name}`}
+                title={done ? `Отменить отметку ${step}` : `Выполнить ${step}`}
+                disabled={busy}
+                onClick={() =>
+                  onCommand({
+                    type: done ? "completion.removed" : "completion.added",
+                    habitId: habit.id,
+                    step,
+                  })
+                }
+              >
+                {done ? (
+                  <img
+                    src="./assets/icon-habbit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                ) : (
+                  step
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="row-actions">
-        {doneToday && (
-          <button
-            className="icon-button undo-button"
-            title="Отменить за сегодня"
-            aria-label={`Отменить за сегодня: ${habit.name}`}
-            disabled={busy}
-            onClick={() =>
-              onCommand({ type: "completion.removed", habitId: habit.id })
-            }
-          >
-            <ArrowCounterClockwise size={18} />
-          </button>
-        )}
         <button
           className="icon-button delete-button"
           title="Удалить привычку"
@@ -244,11 +218,13 @@ export function App() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [deleteError, setDeleteError] = useState("");
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState({ text: "", id: 0 });
+  const message = notice.text;
+  const setMessage = (text) =>
+    setNotice((current) => ({ text, id: current.id + 1 }));
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [offlineReady, setOfflineReady] = useState(false);
-  const [today, setToday] = useState(dayKey());
   const pending = useRef(false);
   function refresh() {
     try {
@@ -267,14 +243,12 @@ export function App() {
     };
     const onOnline = () => setOnline(navigator.onLine);
     const onFocus = () => {
-      setToday(dayKey());
       refresh();
     };
     addEventListener("storage", onStorage);
     addEventListener("online", onOnline);
     addEventListener("offline", onOnline);
     addEventListener("focus", onFocus);
-    const timer = setInterval(() => setToday(dayKey()), 15000);
     if ("serviceWorker" in navigator && import.meta.env.PROD) {
       navigator.serviceWorker
         .register("./sw.js")
@@ -287,14 +261,13 @@ export function App() {
       removeEventListener("online", onOnline);
       removeEventListener("offline", onOnline);
       removeEventListener("focus", onFocus);
-      clearInterval(timer);
     };
   }, []);
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => setMessage(""), 4000);
     return () => clearTimeout(timer);
-  }, [message]);
+  }, [notice.id]);
   async function command(action) {
     if (pending.current)
       throw new HabitError("Секунду, сохраняем предыдущее действие.");
@@ -305,7 +278,6 @@ export function App() {
       const write = () => {
         const updated = persistCommand(localStorage, action);
         setDoc(updated);
-        setToday(dayKey());
       };
       if (navigator.locks) await navigator.locks.request(STORAGE_KEY, write);
       else write();
@@ -313,7 +285,7 @@ export function App() {
         action.type === "habit.created"
           ? "Привычка создана. Самое время начать."
           : action.type === "completion.added"
-            ? "Есть. Сегодня ты человек дела."
+            ? "Дело сделано!"
             : action.type === "completion.removed"
               ? "Отметку отменили. Бывает."
               : "Привычка удалена.",
@@ -411,7 +383,7 @@ export function App() {
               Добавить привычку
             </button>
             <span className="empty-footnote">
-              Одна отметка в день. В своём темпе.
+              Каждый шаг считается. В своём темпе.
             </span>
           </section>
         ) : (
@@ -420,7 +392,6 @@ export function App() {
               <HabitRow
                 key={habit.id}
                 habit={habit}
-                today={today}
                 onCommand={run}
                 onDelete={(habit) => {
                   setDeleteError("");
@@ -488,7 +459,7 @@ export function App() {
         role="status"
         aria-live="polite"
       >
-        {message}
+        <span key={notice.id}>{message}</span>
       </div>
     </div>
   );
