@@ -173,23 +173,50 @@ main {
   gap: 9px;
   min-width: 0;
 }
-.habit-symbol {
-  width: 48px;
-  height: 48px;
-  display: block;
-  object-fit: contain;
-  flex-shrink: 0;
-}
 .habit-track {
   display: flex;
+  flex: 1;
   gap: 9px;
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: #807985 #27242a;
   padding: 5px 0;
   min-width: 0;
 }
 .habit-track::-webkit-scrollbar {
-  display: none;
+  height: 8px;
+}
+.habit-track::-webkit-scrollbar-track {
+  background: #27242a;
+  border-radius: 4px;
+}
+.habit-track::-webkit-scrollbar-thumb {
+  background: #807985;
+  border-radius: 4px;
+}
+.habit-track::-webkit-scrollbar-thumb:hover {
+  background: #a59baa;
+}
+@media (min-width: 561px) and (hover: hover) and (pointer: fine) {
+  .habit-track {
+    scrollbar-color: transparent transparent;
+  }
+  .habit-track::-webkit-scrollbar-track,
+  .habit-track::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  .habit-row:hover .habit-track,
+  .habit-row:focus-within .habit-track {
+    scrollbar-color: #807985 #27242a;
+  }
+  .habit-row:hover .habit-track::-webkit-scrollbar-track,
+  .habit-row:focus-within .habit-track::-webkit-scrollbar-track {
+    background: #27242a;
+  }
+  .habit-row:hover .habit-track::-webkit-scrollbar-thumb,
+  .habit-row:focus-within .habit-track::-webkit-scrollbar-thumb {
+    background: #807985;
+  }
 }
 .step {
   border: 0;
@@ -587,10 +614,6 @@ form > input {
     flex-basis: 41px;
     font-size: 21px;
   }
-  .habit-symbol {
-    height: 43px;
-    width: 43px;
-  }
   .habit-progress,
   .habit-track {
     gap: 7px;
@@ -702,10 +725,6 @@ form > input {
   }
   .delete-button {
     opacity: 0.85;
-  }
-  .habit-symbol {
-    width: 44px;
-    height: 44px;
   }
   .step {
     width: 42px;
