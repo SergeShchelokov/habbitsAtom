@@ -2,6 +2,14 @@
 
 final result: passed
 
+## Scoped update — empty-screen coin
+
+User annotation requested replacing only the illustration above the empty-screen text with their supplied 3D coin. Source: `C:/Users/Admin/Desktop/04d1b9d1069ba52e75baea4d87d0860b0cb3b495.png`. The asset's transparent outer margins were trimmed for web packaging; the coin itself was preserved. Implemented asset: `public/assets/empty-coin.png`.
+
+The illustration keeps its existing 90 × 90 CSS slot (78 × 78 on mobile). Existing typography, spacing, sidebar, copy, buttons and other lightning icons are retained. Removed the old decorative ring/background only from this illustration. Evidence: `docs/qa/empty-coin.png`, 1563 × 1244 normal browser capture, and focused context in `docs/qa/empty-coin-detail.png`. Browser verifies the image loads. Production build passes and includes this image in the offline precache. This visual-only change adds no domain tests.
+
+Scoped result: passed. No actionable P0/P1/P2 differences in the requested region.
+
 ## Targets and evidence
 
 - Source visual truth: `docs/qa/reference.png`, supplied habit-list screenshot, 1467 × 728 px.

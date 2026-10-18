@@ -394,7 +394,7 @@ export function App() {
         {!habits.length ? (
           <section className="empty-state">
             <div className="empty-symbol">
-              <Lightning size={47} weight="fill" />
+              <img src="./assets/empty-coin.png" alt="" aria-hidden="true" />
             </div>
             <p className="eyebrow">НУ ЧТО, НАЧНЁМ?</p>
             <h1>

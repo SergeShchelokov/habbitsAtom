@@ -301,13 +301,14 @@ main {
 .empty-symbol {
   width: 90px;
   height: 90px;
-  border: 1px solid #f7d36238;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--yellow);
-  background: #f7d3620a;
+  display: block;
   margin: 0 0 30px;
+}
+.empty-symbol img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .eyebrow {
   font-size: 10px;
