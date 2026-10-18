@@ -184,12 +184,24 @@ main {
   display: flex;
   gap: 9px;
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: #807985 #27242a;
   padding: 5px 0;
   min-width: 0;
 }
 .habit-track::-webkit-scrollbar {
-  display: none;
+  height: 8px;
+}
+.habit-track::-webkit-scrollbar-track {
+  background: #27242a;
+  border-radius: 4px;
+}
+.habit-track::-webkit-scrollbar-thumb {
+  background: #807985;
+  border-radius: 4px;
+}
+.habit-track::-webkit-scrollbar-thumb:hover {
+  background: #a59baa;
 }
 .step {
   border: 0;
