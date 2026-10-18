@@ -23,6 +23,7 @@
 - [Архитектура и критерии проверки](docs/architecture.md)
 - [Этапы реализации](docs/roadmap.md)
 - [Публикация через GitHub Pages](docs/deployment.md)
+- [Рабочие ветки main и test](docs/branches.md)
 
 ## Текущий статус
 
