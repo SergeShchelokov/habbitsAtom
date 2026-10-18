@@ -20,6 +20,7 @@
 
 - [Архитектура и критерии проверки](docs/architecture.md)
 - [Этапы реализации](docs/roadmap.md)
+- [Публикация через GitHub Pages](docs/deployment.md)
 
 ## Текущий статус
 

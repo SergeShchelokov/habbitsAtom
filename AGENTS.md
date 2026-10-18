@@ -17,3 +17,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - No icon picker or account screen in v0.1. Supabase sync is the next milestone; hosting/domain come last.
 - Do not display cloud-save success before actual Supabase integration.
 - The empty-screen illustration uses the user's supplied 3D yellow lightning coin (public/assets/empty-coin.png). This replacement applies only to that illustration; other lightning icons stay as they are.
+- Free preview hosting target: GitHub Pages from main via .github/workflows/deploy-pages.yml. Keep asset URLs relative so the app works under /habbitsAtom/ and locally. A custom hosting/domain setup remains a later option.
