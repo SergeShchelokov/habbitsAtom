@@ -150,12 +150,6 @@ function HabitRow({ habit, onCommand, onDelete, busy }) {
         {complete && <p className="done-copy">Готово. А ты сомневался.</p>}
       </div>
       <div className="habit-progress">
-        <img
-          className="habit-symbol"
-          src="./assets/icon-habbit.svg"
-          alt=""
-          aria-hidden="true"
-        />
         <div
           className="habit-track"
           tabIndex={0}
