@@ -1,23 +1,35 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Activity, Check, Pause, Play, Plus, Trash2, Zap } from '@lucide/vue'
+import { Activity, Battery, Check, ChevronRight, Clock3, Grid2X2, Lightbulb, Pause, Play, Plus, RotateCcw, Trash2, Zap } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Bubble, BubbleContent, BubbleGroup } from '@/components/ui/bubble'
+import { ButtonGroup } from '@/components/ui/button-group'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
+import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { Slider } from '@/components/ui/slider'
-import ChargeRing from '@/components/ChargeRing.vue'
 import FocusChip from '@/components/FocusChip.vue'
 import FocusDial from '@/components/FocusDial.vue'
-import { GOAL, MINUTES, STORE_KEY, charge, createHabit, createIdea, loadTracker, newFocus, newTracker, remainingAt, saveEnergy, todayCount } from '@/tracker'
+import MoodSlider from '@/components/MoodSlider.vue'
+import { energyColor, energyLabel } from '@/lib/mood'
+import { GOAL, MINUTES, STORE_KEY, charge, createHabit, createIdea, loadTracker, dayKey, newFocus, newTracker, remainingAt, saveEnergy, todayCount } from '@/tracker'
 import type { Habit, Minutes, Tracker } from '@/tracker'
 
-const figma = import.meta.env.BASE_URL + 'assets/figma/'
-const sections = [{id:'habits',name:'Хэбы',asset:'grid.svg'},{id:'focus',name:'Фокус',asset:'focus.svg'},{id:'energy',name:'Энергия',asset:''},{id:'ideas',name:'Идеи',asset:'ideas.svg'}] as const
+const sections = [
+  { id:'habits', name:'Хэбы', icon:Grid2X2, eyebrow:'ЕЖЕДНЕВНЫЕ ПРИВЫЧКИ', description:'Один заряд за раз. Всего — двадцать один.' },
+  { id:'focus', name:'Фокус', icon:Clock3, eyebrow:'ТАЙМЕР', description:'Выбери длительность и займись одним делом.' },
+  { id:'energy', name:'Энергия', icon:Activity, eyebrow:'ДНЕВНИК СОСТОЯНИЯ', description:'Отметь, как ты себя чувствуешь сейчас.' },
+  { id:'ideas', name:'Идеи', icon:Lightbulb, eyebrow:'ЛИЧНЫЕ ЗАМЕТКИ', description:'Поймай сейчас. Разберёшь потом.' },
+] as const
 const section = ref<typeof sections[number]['id']>('habits')
-const focusHeading = ref<HTMLHeadingElement | null>(null)
+const currentPage = computed(() => sections.find(item => item.id === section.value) ?? sections[0])
+const pageHeading = ref<HTMLHeadingElement | null>(null)
 const state = ref(newTracker())
 const storageError = ref('')
 const formError = ref('')
@@ -31,14 +43,18 @@ let navigationRevision = 0
 const active = computed(() => state.value.habits.filter(h => h.charges.length < GOAL))
 const completed = computed(() => state.value.habits.filter(h => h.charges.length === GOAL))
 const habitFilter = ref<'active'|'completed'>('active')
-const habitList = computed(() => habitFilter.value === 'active' ? active.value : completed.value)
+const filters = [
+  { key:'active', label:'Активные', habits:active, empty:'Все хэбы собраны. Можно начать новый.' },
+  { key:'completed', label:'Собранные', habits:completed, empty:'Здесь появятся хэбы с 21 зарядом.' },
+] as const
 const createOpen = ref(false)
 const deleteHabit = ref<Habit | null>(null)
 const name = ref(''), note = ref(''), dailyLimit = ref<1|2|3>(1)
-const energy = ref([5]), energyNote = ref('')
+const energy = ref(5), energyNote = ref('')
 const ideaTitle = ref(''), ideaText = ref('')
-const energyValue = computed(() => energy.value[0] ?? 5)
-const energyMood = computed(() => energyValue.value <= 2 ? 'Батарейка на нуле' : energyValue.value <= 4 ? 'На спаде' : energyValue.value <= 6 ? 'Ровно' : energyValue.value <= 8 ? 'Хороший заряд' : 'Полон энергии')
+const energyMood = computed(() => energyLabel(energy.value))
+const today = computed(() => dayKey(now.value))
+const todayEntries = computed(() => state.value.energy.filter(entry => dayKey(entry.at) === today.value).length)
 const remaining = computed(() => remainingAt(state.value.focus, now.value))
 const seconds = computed(() => Math.ceil(remaining.value / 1000))
 const running = computed(() => state.value.focus.deadline !== null && remaining.value > 0)
@@ -46,7 +62,8 @@ const finished = computed(() => state.value.focus.finished || remaining.value ==
 const timeText = computed(() => `${String(Math.floor(seconds.value / 60)).padStart(2,'0')}:${String(seconds.value % 60).padStart(2,'0')}`)
 const stamp = new Intl.DateTimeFormat('ru', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
 const last = (h: Habit) => h.charges.at(-1)
-const coin = import.meta.env.BASE_URL + 'assets/empty-coin.png'
+const dayStamp = new Intl.DateTimeFormat('ru', { day:'numeric', month:'long' })
+const dateLabel = computed(() => dayStamp.format(now.value))
 
 function hydrate() {
   try { state.value = loadTracker(localStorage); storageError.value = '' }
@@ -79,9 +96,12 @@ function go(next: typeof section.value, focusTitle = false) {
   interrupted?.skipTransition()
   const update = async () => {
     if (revision !== navigationRevision) return
+    const changed = next !== section.value
     section.value = next
     await nextTick()
-    if (focusTitle && revision === navigationRevision) focusHeading.value?.focus()
+    if (revision !== navigationRevision) return
+    if (changed) window.scrollTo({ top:0, behavior:'instant' })
+    if (focusTitle) pageHeading.value?.focus({ preventScroll:true })
   }
 
   // Switch both views in one capture while keeping the existing timer state.
@@ -139,7 +159,7 @@ function tick() {
     if (save(d => { if (d.focus.deadline === deadline) { d.focus = { ...d.focus, remaining:0, deadline:null, finished:true }; ended = true } }) && ended) { chime(); inform('Фокус завершён. Можно выдохнуть.') }
   }
 }
-function addEnergy() { if (save(d => { d.energy.unshift(saveEnergy(energyValue.value, energyNote.value)) })) { energyNote.value = ''; inform('Уровень энергии записан.') } }
+function addEnergy() { if (save(d => { d.energy.unshift(saveEnergy(energy.value, energyNote.value)) })) { energyNote.value = ''; inform('Уровень энергии записан.') } }
 function addIdea() { if (save(d => { d.ideas.unshift(createIdea(ideaTitle.value, ideaText.value)) })) { ideaTitle.value = ''; ideaText.value = ''; inform('Идея на месте.') } }
 function storageChanged(event: StorageEvent) { if (event.key === STORE_KEY || event.key === null) hydrate() }
 onMounted(() => { hydrate(); tick(); ticker = window.setInterval(tick, 250); window.addEventListener('storage', storageChanged) })
@@ -148,80 +168,267 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
 
 <template>
   <div class="app-shell">
-    <aside class="rail" aria-label="Навигация">
-      <Button class="brand" variant="ghost" aria-label=":21 — к хэбам" @click="go('habits')"><img :src="figma + 'logo.svg'" alt=":21" /></Button>
-      <div class="rail-create"><img class="add-glow" :src="figma + 'add-glow.svg'" alt=""/><Button class="rail-add" aria-label="Новый хэб" @click="openCreate"><img :src="figma + 'add.svg'" alt=""/></Button></div>
+    <aside class="rail">
+      <Button type="button" variant="ghost" class="brand" aria-label=":21 — к хэбам" @click="go('habits')">
+        <span class="brand-mark"><Zap :size="15" fill="currentColor" aria-hidden="true" /></span>
+        <strong>:21</strong><span class="brand-label">Трекер привычек</span>
+      </Button>
+      <div class="rail-section">Разделы</div>
       <nav class="nav-list" aria-label="Разделы">
-        <Button v-for="item in sections" :key="item.id" :variant="section === item.id ? 'secondary' : 'ghost'" :class="['nav-link', {'is-current':section === item.id}]" :aria-current="section === item.id ? 'page' : undefined" @click="go(item.id)"><span class="nav-icon"><img v-if="item.asset" :src="figma + item.asset" alt=""/><Activity v-else :size="29" aria-hidden="true"/></span>{{ item.name }}</Button>
+        <Button v-for="item in sections" :key="item.id" type="button" :variant="section === item.id ? 'secondary' : 'ghost'"
+          class="nav-link" :aria-current="section === item.id ? 'page' : undefined" @click="go(item.id)">
+          <component :is="item.icon" class="size-[18px]" aria-hidden="true" />
+          <span>{{ item.name }}</span>
+        </Button>
       </nav>
+      <div class="rail-foot"><span aria-hidden="true" />Данные на устройстве</div>
     </aside>
-    <main :class="['main-content', { 'is-focus': section === 'focus' }]">
-      <header v-if="section !== 'focus'" class="top-line">
-        <span>ЛИЧНОЕ ПРОСТРАНСТВО</span>
-        <FocusChip v-if="running" :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" @click="go('focus', true)" />
-        <Badge v-else variant="outline" class="rounded-full text-muted-foreground">На этом устройстве</Badge>
-      </header>
-      <p v-if="storageError" class="error" role="alert">{{ storageError }}</p>
-      <p v-if="formError && !createOpen && !deleteHabit" class="error" role="alert">{{ formError }}</p>
 
-      <section v-if="section === 'habits'" aria-labelledby="habits-heading">
-        <header class="page-header"><div><h1 id="habits-heading">Твои хэбы</h1><p>Один заряд за раз. Всего — двадцать один.</p></div><Button v-if="state.habits.length" class="page-add rounded-full min-h-11 px-5" @click="openCreate"><Plus aria-hidden="true"/>Новый хэб</Button></header>
-        <Card v-if="!state.habits.length" class="empty-card">
-          <CardContent class="flex flex-col items-center gap-4 py-12 text-center sm:py-17">
-            <img :src="coin" width="142" height="142" alt="" class="size-32 object-contain sm:size-36"/>
-            <CardTitle class="text-2xl">Пока ни одного заряда</CardTitle>
-            <p class="max-w-sm text-sm leading-relaxed text-muted-foreground">Выбери привычку, которую хочется повторить. Первый заряд — уже хороший старт.</p>
-            <Button class="mt-2 rounded-full min-h-11 px-5" @click="openCreate"><Plus aria-hidden="true"/>Создать первый хэб</Button>
-          </CardContent>
-        </Card>
-        <template v-else>
-          <div class="segmented" aria-label="Показать хэбы">
-            <Button v-for="filter in (['active','completed'] as const)" :key="filter" :variant="habitFilter === filter ? 'secondary' : 'ghost'" :aria-pressed="habitFilter === filter" @click="habitFilter = filter">{{ filter === 'active' ? `Активные · ${active.length}` : `Собранные · ${completed.length}` }}</Button>
+    <div class="workspace">
+      <header class="workspace-bar">
+        <div class="workspace-bar-inner">
+          <Button type="button" variant="ghost" class="brand mobile-brand" aria-label=":21 — к хэбам" @click="go('habits')">
+            <span class="brand-mark"><Zap :size="15" fill="currentColor" aria-hidden="true" /></span><strong>:21</strong>
+          </Button>
+          <div class="breadcrumb">
+            <span>Личное пространство</span><ChevronRight :size="14" aria-hidden="true" /><span>{{ currentPage.name }}</span>
           </div>
-          <Card v-if="!habitList.length"><CardContent class="py-8 text-muted-foreground">{{ habitFilter === 'active' ? 'Все хэбы собраны. Можно начать новый.' : 'Здесь появятся хэбы с 21 зарядом.' }}</CardContent></Card>
-          <div v-else class="habit-list">
-            <Card v-for="h in habitList" :key="h.id" class="habit-card gap-0 py-0">
-              <CardContent class="habit-inner">
-                <ChargeRing class="habit-ring" :value="h.charges.length" :max="GOAL" :label="`Прогресс: ${h.name}`" :text="String(h.charges.length)" caption="из 21"/>
-                <div class="min-w-0"><Badge variant="outline" class="mb-2 text-muted-foreground">{{ h.charges.length === GOAL ? 'ХЭБ СОБРАН' : `СЕГОДНЯ ${todayCount(h, now)} ИЗ ${h.dailyLimit}` }}</Badge><CardTitle class="habit-title break-words">{{ h.name }}</CardTitle><p v-if="h.note" class="habit-note">{{ h.note }}</p><p v-if="last(h)" class="habit-note">Последний заряд: {{ stamp.format(last(h)!.at) }}</p></div>
-                <div class="habit-actions"><Button class="rounded-full" :disabled="h.charges.length === GOAL || todayCount(h, now) >= h.dailyLimit" @click="changeCharge(h)"><Zap aria-hidden="true"/>{{ h.charges.length === GOAL ? 'Собран' : todayCount(h, now) >= h.dailyLimit ? 'До завтра' : '+1 заряд' }}</Button><Button v-if="h.charges.length" variant="ghost" class="text-muted-foreground" @click="changeCharge(h,true)">Отменить заряд</Button><Button variant="ghost" size="icon" class="text-muted-foreground" :aria-label="`Удалить хэб ${h.name}`" @click="formError = ''; deleteHabit = h"><Trash2 aria-hidden="true"/></Button></div>
+          <div class="workspace-actions">
+            <FocusChip v-if="section !== 'focus' && running" :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" @click="go('focus', true)" />
+            <Button type="button" class="new-habit" aria-label="Новый хэб" @click="openCreate">
+              <Plus data-icon="inline-start" aria-hidden="true" /><span>Новый хэб</span>
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">{{ currentPage.eyebrow }}</p>
+            <h1 id="page-heading" ref="pageHeading" tabindex="-1">{{ currentPage.name }}</h1>
+            <p class="page-description">{{ currentPage.description }}</p>
+          </div>
+          <Badge v-if="section === 'energy'" variant="outline" class="date-badge hidden md:inline-flex">{{ dateLabel }}</Badge>
+          <Badge v-if="section === 'habits'" variant="outline" class="date-badge hidden md:inline-flex">Цель · {{ GOAL }} заряд</Badge>
+        </header>
+
+        <p v-if="storageError" class="error" role="alert">{{ storageError }}</p>
+        <p v-if="formError && !createOpen && !deleteHabit" class="error" role="alert">{{ formError }}</p>
+
+        <section v-if="section === 'habits'" aria-labelledby="page-heading">
+          <div class="content-grid">
+            <Card class="panel">
+              <CardHeader>
+                <CardTitle class="panel-title">Твои хэбы</CardTitle>
+                <CardDescription>Здесь виден прогресс каждой привычки.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Empty v-if="!state.habits.length" class="empty-state">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon"><Zap aria-hidden="true" /></EmptyMedia>
+                    <EmptyTitle>Пока ни одного заряда</EmptyTitle>
+                    <EmptyDescription>Выбери привычку, которую хочется повторять.</EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent><Button type="button" @click="openCreate"><Plus data-icon="inline-start" aria-hidden="true" />Создать первый хэб</Button></EmptyContent>
+                </Empty>
+                <Tabs v-else v-model="habitFilter" class="gap-4">
+                  <TabsList aria-label="Хэбы по состоянию" class="habit-tabs">
+                    <TabsTrigger v-for="filter in filters" :key="filter.key" :value="filter.key">
+                      {{ filter.label }} <span class="tab-count">{{ filter.habits.value.length }}</span>
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent v-for="filter in filters" :key="filter.key" :value="filter.key">
+                    <Empty v-if="!filter.habits.value.length" class="empty-state">
+                      <EmptyHeader><EmptyMedia variant="icon"><Grid2X2 aria-hidden="true" /></EmptyMedia><EmptyTitle>{{ filter.empty }}</EmptyTitle></EmptyHeader>
+                    </Empty>
+                    <ItemGroup v-else as="ul" class="gap-3">
+                      <Item v-for="h in filter.habits.value" :key="h.id" as="li" variant="outline" class="habit-item">
+                        <ItemContent>
+                          <ItemTitle class="habit-title">{{ h.name }}</ItemTitle>
+                          <ItemDescription v-if="h.note" class="line-clamp-none whitespace-pre-wrap wrap-anywhere">{{ h.note }}</ItemDescription>
+                        </ItemContent>
+                        <ItemActions><Badge variant="secondary" class="counter-badge">{{ h.charges.length }} / {{ GOAL }}</Badge></ItemActions>
+                        <div class="habit-progress">
+                          <Progress class="h-1.5" :model-value="h.charges.length / GOAL * 100" :aria-label="`Прогресс: ${h.name}`" :aria-valuetext="`${h.charges.length} из ${GOAL}`" />
+                          <div class="habit-meta"><span>{{ h.charges.length === GOAL ? 'Хэб собран' : `Сегодня: ${todayCount(h, now)} / ${h.dailyLimit}` }}</span><time v-if="last(h)" :datetime="new Date(last(h)!.at).toISOString()">{{ stamp.format(last(h)!.at) }}</time></div>
+                        </div>
+                        <ItemActions class="habit-controls">
+                          <Button v-if="h.charges.length < GOAL" type="button" :disabled="todayCount(h, now) >= h.dailyLimit" @click="changeCharge(h)">
+                            <Zap data-icon="inline-start" aria-hidden="true" />{{ todayCount(h, now) >= h.dailyLimit ? 'До завтра' : '+1 заряд' }}
+                          </Button>
+                          <Button v-if="h.charges.length" type="button" variant="ghost" class="text-muted-foreground" @click="changeCharge(h,true)">
+                            <RotateCcw data-icon="inline-start" aria-hidden="true" />Отменить заряд
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" class="delete-habit text-muted-foreground" :aria-label="`Удалить хэб ${h.name}`" @click="formError = ''; deleteHabit = h"><Trash2 aria-hidden="true" /></Button>
+                        </ItemActions>
+                      </Item>
+                    </ItemGroup>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+            <Card class="panel side-panel">
+              <CardHeader><CardTitle class="panel-title">Твой прогресс</CardTitle><CardDescription>Каждое повторение — один заряд.</CardDescription></CardHeader>
+              <CardContent>
+                <div class="habit-totals">
+                  <div><strong>{{ active.length }}</strong><span>Активные</span></div>
+                  <div><strong>{{ completed.length }}</strong><span>Собранные</span></div>
+                </div>
+                <Bubble variant="tinted" class="tip-bubble"><BubbleContent>Пропустил день? Все заряды на месте. Продолжай в своём темпе.</BubbleContent></Bubble>
               </CardContent>
             </Card>
           </div>
-        </template>
-      </section>
+        </section>
 
-      <section v-else-if="section === 'focus'" aria-labelledby="focus-heading">
-        <nav class="focus-breadcrumb" aria-label="Путь"><button type="button" @click="go('habits')">Хэбы</button><span aria-hidden="true">/</span><span aria-current="page">Фокус</span></nav>
-        <header class="page-header focus-heading"><div><h1 id="focus-heading" ref="focusHeading" tabindex="-1">Фокус на {{ state.focus.minutes }} минут</h1></div></header>
-        <div class="focus-stage">
-          <div v-if="!running" class="segmented focus-presets" aria-label="Длительность"><Button v-for="m in MINUTES" :key="m" :variant="m === state.focus.minutes ? 'secondary' : 'ghost'" :aria-pressed="m === state.focus.minutes" @click="chooseMinutes(m)">{{ m }} мин</Button></div>
-          <FocusDial :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" :state="finished ? 'ГОТОВО' : running ? 'В ФОКУСЕ' : remaining < state.focus.minutes * 60_000 ? 'НА ПАУЗЕ' : 'ФОКУС'" :caption="`из ${state.focus.minutes}:00`"/>
-          <div class="focus-actions"><Button class="focus-primary" @click="toggleTimer"><Pause v-if="running" fill="currentColor" aria-hidden="true"/><Play v-else fill="currentColor" aria-hidden="true"/>{{ running ? 'Пауза' : finished ? 'Начать заново' : remaining < state.focus.minutes * 60_000 ? 'Продолжить' : 'Начать' }}</Button><Button v-if="!running && remaining < state.focus.minutes * 60_000" variant="ghost" class="text-muted-foreground" @click="chooseMinutes(state.focus.minutes)">Сбросить</Button></div>
-        </div>
-      </section>
+        <section v-else-if="section === 'focus'" aria-labelledby="page-heading">
+          <Card class="focus-panel panel">
+            <CardHeader class="focus-panel-head">
+              <CardTitle class="sr-only">Таймер на {{ state.focus.minutes }} минут</CardTitle>
+              <ButtonGroup v-if="!running" aria-label="Длительность таймера">
+                <Button v-for="m in MINUTES" :key="m" type="button" :variant="m === state.focus.minutes ? 'secondary' : 'outline'" :aria-pressed="m === state.focus.minutes" @click="chooseMinutes(m)">{{ m }} мин</Button>
+              </ButtonGroup>
+              <Badge v-else variant="outline" class="focus-status"><span />Сессия идёт</Badge>
+            </CardHeader>
+            <CardContent class="focus-stage">
+              <FocusDial :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" :state="finished ? 'ГОТОВО' : running ? 'В ФОКУСЕ' : remaining < state.focus.minutes * 60_000 ? 'НА ПАУЗЕ' : 'ФОКУС'" :caption="`из ${state.focus.minutes}:00`" />
+              <div class="focus-actions">
+                <Button type="button" size="lg" class="focus-primary" @click="toggleTimer">
+                  <Pause v-if="running" fill="currentColor" aria-hidden="true" /><Play v-else fill="currentColor" aria-hidden="true" />
+                  {{ running ? 'Пауза' : finished ? 'Начать заново' : remaining < state.focus.minutes * 60_000 ? 'Продолжить' : 'Начать' }}
+                </Button>
+                <Button v-if="!running && remaining < state.focus.minutes * 60_000" type="button" variant="ghost" class="text-muted-foreground" @click="chooseMinutes(state.focus.minutes)">Сбросить</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
-      <section v-else-if="section === 'energy'" aria-labelledby="energy-heading">
-        <header class="page-header"><div><h1 id="energy-heading">Энергия</h1><p>Отметь, как ты себя чувствуешь сейчас.</p></div></header>
-        <Card><CardHeader><CardTitle>Твой заряд</CardTitle></CardHeader><CardContent>
-          <form class="form-stack" @submit.prevent="addEnergy"><div><div class="score-line"><strong>{{ energyValue }}<small> / 10</small></strong><span>{{ energyMood }}</span></div><Slider v-model="energy" :min="0" :max="10" :step="1" aria-label="Уровень энергии от 0 до 10"/><div class="range-labels"><span>Без сил</span><span>Полон энергии</span></div></div><label for="energy-note">Комментарий · необязательно</label><Textarea id="energy-note" v-model="energyNote" maxlength="500" placeholder="Что повлияло на заряд?"/><div class="form-foot"><span>{{ energyNote.length }}/500</span><Button type="submit" class="rounded-full">Записать</Button></div></form>
-        </CardContent></Card>
-        <div v-if="state.energy.length" class="entry-list"><h2>Записи</h2><Card v-for="e in state.energy" :key="e.id" class="py-4"><CardContent><div class="entry-head"><Badge variant="secondary">{{ e.score }}/10</Badge><time class="text-muted-foreground">{{ stamp.format(e.at) }}</time></div><p v-if="e.note" class="entry-text">{{ e.note }}</p></CardContent></Card></div>
-      </section>
+        <section v-else-if="section === 'energy'" aria-labelledby="page-heading">
+          <div class="content-grid">
+            <Card class="panel energy-panel">
+              <CardHeader>
+                <CardTitle class="panel-title">Новая отметка</CardTitle>
+                <CardDescription>Сколько у тебя сил прямо сейчас?</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form class="energy-form" @submit.prevent="addEnergy">
+                  <div class="energy-meter" :style="{ '--selected-mood': energyColor(energy) }">
+                    <div class="score-line">
+                      <output class="score-value" aria-hidden="true">{{ energy }}<span> / 10</span></output>
+                      <Badge variant="outline" class="mood-badge"><span aria-hidden="true" />{{ energyMood }}</Badge>
+                    </div>
+                    <MoodSlider v-model="energy" />
+                  </div>
+                  <Field class="gap-2">
+                    <div class="field-top"><FieldLabel for="energy-note">Комментарий</FieldLabel><span>Необязательно</span></div>
+                    <Textarea id="energy-note" v-model="energyNote" maxlength="500" class="journal-textarea" aria-describedby="energy-count" placeholder="Что повлияло на заряд?" />
+                  </Field>
+                  <div class="form-foot">
+                    <span id="energy-count">{{ energyNote.length }} / 500</span>
+                    <Button type="submit" size="lg"><Check data-icon="inline-start" aria-hidden="true" />Записать</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+            <Card class="panel side-panel">
+              <CardHeader>
+                <div class="panel-heading-row"><CardTitle class="panel-title">История</CardTitle><Badge variant="outline" class="counter-badge">Сегодня · {{ todayEntries }}</Badge></div>
+                <CardDescription>Отметки энергии и твои комментарии.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Empty v-if="!state.energy.length" class="empty-state">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon"><Battery aria-hidden="true" /></EmptyMedia>
+                    <EmptyTitle>Пока без отметок</EmptyTitle><EmptyDescription>Первая запись появится здесь.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+                <BubbleGroup v-else as="ul" class="diary-list">
+                  <Bubble v-for="entry in state.energy" :key="entry.id" as="li" variant="muted" class="diary-bubble">
+                    <BubbleContent class="diary-bubble-content">
+                      <div class="entry-head">
+                        <span class="entry-score" :style="{ '--entry-mood': energyColor(entry.score) }"><span aria-hidden="true" />{{ entry.score }}/10 · {{ energyLabel(entry.score) }}</span>
+                        <time :datetime="new Date(entry.at).toISOString()">{{ stamp.format(entry.at) }}</time>
+                      </div>
+                      <p v-if="entry.note" class="entry-text">{{ entry.note }}</p>
+                    </BubbleContent>
+                  </Bubble>
+                </BubbleGroup>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
-      <section v-else aria-labelledby="ideas-heading">
-        <header class="page-header"><div><h1 id="ideas-heading">Идеи</h1><p>Поймай сейчас. Разберёшь потом.</p></div></header>
-        <Card><CardHeader><CardTitle>Новая идея</CardTitle></CardHeader><CardContent><form class="form-stack" @submit.prevent="addIdea"><label for="idea-title">Название</label><Input id="idea-title" v-model="ideaTitle" required maxlength="100" placeholder="О чём идея?"/><label for="idea-text">Текст</label><Textarea id="idea-text" v-model="ideaText" required maxlength="4000" class="min-h-28" placeholder="Запиши, пока не улетела"/><div class="form-foot"><span>{{ ideaText.length }}/4000</span><Button class="rounded-full" type="submit">Сохранить идею</Button></div></form></CardContent></Card>
-        <div v-if="state.ideas.length" class="entry-list"><h2>Сохранённые идеи</h2><Card v-for="i in state.ideas" :key="i.id" class="gap-3"><CardHeader><div class="entry-head"><CardTitle class="break-words">{{ i.title }}</CardTitle><time class="shrink-0 text-xs text-muted-foreground">{{ stamp.format(i.at) }}</time></div></CardHeader><CardContent><p class="entry-text">{{ i.text }}</p></CardContent></Card></div>
-      </section>
-    </main>
+        <section v-else aria-labelledby="page-heading">
+          <div class="content-grid">
+            <Card class="panel">
+              <CardHeader>
+                <CardTitle class="panel-title">Новая идея</CardTitle>
+                <CardDescription>Пары строк достаточно, чтобы не забыть замысел.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form class="form-stack" @submit.prevent="addIdea">
+                  <FieldGroup class="gap-4">
+                    <Field class="gap-2"><FieldLabel for="idea-title">Название</FieldLabel><Input id="idea-title" v-model="ideaTitle" required maxlength="100" placeholder="О чём идея?" /></Field>
+                    <Field class="gap-2"><FieldLabel for="idea-text">Текст</FieldLabel><Textarea id="idea-text" v-model="ideaText" required maxlength="4000" aria-describedby="idea-count" class="journal-textarea" placeholder="Запиши, пока не улетела" /></Field>
+                  </FieldGroup>
+                  <div class="form-foot"><span id="idea-count">{{ ideaText.length }} / 4000</span><Button type="submit" size="lg">Сохранить идею</Button></div>
+                </form>
+              </CardContent>
+            </Card>
+            <Card class="panel side-panel">
+              <CardHeader>
+                <div class="panel-heading-row"><CardTitle class="panel-title">Сохранённые идеи</CardTitle><Badge variant="outline" class="counter-badge">{{ state.ideas.length }}</Badge></div>
+                <CardDescription>Загляни сюда, когда вернёшься к задумкам.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Empty v-if="!state.ideas.length" class="empty-state">
+                  <EmptyHeader><EmptyMedia variant="icon"><Lightbulb aria-hidden="true" /></EmptyMedia><EmptyTitle>Здесь появятся идеи</EmptyTitle><EmptyDescription>Запиши первую, как только придёт в голову.</EmptyDescription></EmptyHeader>
+                </Empty>
+                <BubbleGroup v-else as="ul" class="diary-list">
+                  <Bubble v-for="idea in state.ideas" :key="idea.id" as="li" variant="muted" class="diary-bubble">
+                    <BubbleContent class="diary-bubble-content">
+                      <div class="entry-head"><strong class="idea-title">{{ idea.title }}</strong><time :datetime="new Date(idea.at).toISOString()">{{ stamp.format(idea.at) }}</time></div>
+                      <p class="entry-text">{{ idea.text }}</p>
+                    </BubbleContent>
+                  </Bubble>
+                </BubbleGroup>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      </main>
+    </div>
 
     <Dialog v-model:open="createOpen">
-      <DialogContent class="max-h-[90svh] overflow-y-auto" :show-close-button="false"><DialogHeader><DialogTitle>Новый хэб</DialogTitle><DialogDescription>Цель — 21 выполнение. Дневной лимит выбираешь ты.</DialogDescription></DialogHeader>
-        <form class="form-stack" @submit.prevent="addHabit"><label for="habit-name">Привычка</label><Input id="habit-name" v-model="name" maxlength="80" required placeholder="Например, ходить на бокс"/><label for="habit-note">Комментарий · необязательно</label><Textarea id="habit-note" v-model="note" maxlength="200" placeholder="Когда или зачем?"/><span class="text-xs text-muted-foreground">{{ note.length }}/200</span><fieldset><legend>Максимум выполнений в день</legend><div class="segmented mt-2"><Button v-for="n in ([1,2,3] as const)" :key="n" type="button" :variant="dailyLimit === n ? 'secondary' : 'ghost'" :aria-pressed="dailyLimit === n" @click="dailyLimit = n">{{ n }}</Button></div></fieldset><p v-if="formError" class="error" role="alert">{{ formError }}</p><DialogFooter><Button variant="outline" type="button" @click="createOpen = false; formError = ''">Отмена</Button><Button type="submit">Создать хэб</Button></DialogFooter></form>
+      <DialogContent class="max-h-[90svh] overflow-y-auto" :show-close-button="false">
+        <DialogHeader><DialogTitle>Новый хэб</DialogTitle><DialogDescription>Цель — 21 выполнение. Дневной лимит выбираешь ты.</DialogDescription></DialogHeader>
+        <form class="form-stack" @submit.prevent="addHabit">
+          <FieldGroup class="gap-4">
+            <Field class="gap-2"><FieldLabel for="habit-name">Привычка</FieldLabel><Input id="habit-name" v-model="name" maxlength="80" required placeholder="Например, ходить на бокс" /></Field>
+            <Field class="gap-2">
+              <div class="field-top"><FieldLabel for="habit-note">Комментарий</FieldLabel><span>Необязательно</span></div>
+              <Textarea id="habit-note" v-model="note" maxlength="200" aria-describedby="habit-count" placeholder="Когда или зачем?" />
+              <FieldDescription id="habit-count" class="text-right text-xs">{{ note.length }} / 200</FieldDescription>
+            </Field>
+            <FieldSet class="gap-2">
+              <FieldLegend variant="label">Максимум выполнений в день</FieldLegend>
+              <ButtonGroup><Button v-for="n in ([1,2,3] as const)" :key="n" type="button" :variant="dailyLimit === n ? 'secondary' : 'outline'" :aria-pressed="dailyLimit === n" @click="dailyLimit = n">{{ n }}</Button></ButtonGroup>
+            </FieldSet>
+          </FieldGroup>
+          <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+          <DialogFooter><Button variant="outline" type="button" @click="createOpen = false; formError = ''">Отмена</Button><Button type="submit">Создать хэб</Button></DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
-    <Dialog :open="!!deleteHabit" @update:open="open => { if (!open) { deleteHabit = null; formError = '' } }"><DialogContent :show-close-button="false"><DialogHeader><DialogTitle>Удалить хэб?</DialogTitle><DialogDescription>«{{ deleteHabit?.name }}» и его отметки будут удалены с этого устройства.</DialogDescription></DialogHeader><p v-if="formError" class="error" role="alert">{{ formError }}</p><DialogFooter><Button variant="outline" @click="deleteHabit = null; formError = ''">Отмена</Button><Button variant="destructive" @click="removeHabit">Удалить</Button></DialogFooter></DialogContent></Dialog>
-    <div v-if="toastMessage" class="notice" role="status"><span class="notice-icon"><Check :size="17" aria-hidden="true"/></span>{{ toastMessage }}</div>
+    <Dialog :open="!!deleteHabit" @update:open="open => { if (!open) { deleteHabit = null; formError = '' } }">
+      <DialogContent :show-close-button="false">
+        <DialogHeader><DialogTitle>Удалить хэб?</DialogTitle><DialogDescription>«{{ deleteHabit?.name }}» и его отметки будут удалены с этого устройства.</DialogDescription></DialogHeader>
+        <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+        <DialogFooter><Button variant="outline" type="button" @click="deleteHabit = null; formError = ''">Отмена</Button><Button variant="destructive" type="button" @click="removeHabit">Удалить</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <div class="notice" role="status">
+      <Bubble v-if="toastMessage" variant="outline" class="notice-bubble"><BubbleContent><Check :size="16" aria-hidden="true" />{{ toastMessage }}</BubbleContent></Bubble>
+    </div>
   </div>
 </template>
