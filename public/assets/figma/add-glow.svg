@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="141" height="141" viewBox="0 0 141 141" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle id="Add habit glow" cx="70.5" cy="70.5" r="70.5" fill="url(#paint0_radial_0_18)"/>
+<defs>
+<radialGradient id="paint0_radial_0_18" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(70.5 70.5) scale(70.5)">
+<stop stop-color="#FFD453" stop-opacity="0.0705882"/>
+<stop offset="1" stop-color="#FFD453" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>
