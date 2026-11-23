@@ -4,7 +4,7 @@ export const MINUTES = [15, 30] as const
 export type Minutes = typeof MINUTES[number]
 export type Charge = { id: string; at: number; day: string }
 export type Habit = { id: string; name: string; note: string; dailyLimit: 1 | 2 | 3; charges: Charge[] }
-export type Energy = { id: string; at: number; score: number; note: string }
+export type Energy = { id: string; at: number; score: number; note: string; kind?: 'mood' }
 export type Idea = { id: string; at: number; title: string; text: string }
 export type Focus = { minutes: Minutes; remaining: number; deadline: number | null; finished: boolean }
 export type Tracker = { version: 1; habits: Habit[]; energy: Energy[]; ideas: Idea[]; focus: Focus }
@@ -26,7 +26,8 @@ export function loadTracker(store: Pick<Storage, 'getItem'>): Tracker {
       (d.focus.deadline !== null && !instant(d.focus.deadline)) || typeof d.focus.finished !== 'boolean' ||
       !d.habits.every(h => h && isText(h.id, 80, true) && isText(h.name, 80, true) && isText(h.note, 200) && [1, 2, 3].includes(h.dailyLimit) &&
         Array.isArray(h.charges) && h.charges.length <= GOAL && h.charges.every(c => c && isText(c.id, 80, true) && instant(c.at) && isText(c.day, 32, true))) ||
-      !d.energy.every(e => e && isText(e.id, 80, true) && instant(e.at) && Number.isInteger(e.score) && e.score >= 0 && e.score <= 10 && isText(e.note, 500)) ||
+      !d.energy.every(e => e && isText(e.id, 80, true) && instant(e.at) && Number.isInteger(e.score) && e.score >= 0 && e.score <= 10 &&
+        (e.kind === undefined || (e.kind === 'mood' && e.score >= 1)) && isText(e.note, 500)) ||
       !d.ideas.every(i => i && isText(i.id, 80, true) && instant(i.at) && isText(i.title, 100, true) && isText(i.text, 4000, true))) {
     throw new Error('Не удалось прочитать сохранённые данные.')
   }
@@ -49,6 +50,10 @@ export function charge(habit: Habit, at = Date.now()): Charge {
 export function saveEnergy(score: number, note: string): Energy {
   if (!Number.isInteger(score) || score < 0 || score > 10 || !isText(note, 500)) throw new Error('Выбери уровень от 0 до 10 и проверь комментарий.')
   return { id: id(), at: Date.now(), score, note: note.trim() }
+}
+export function saveMood(score: number, note: string): Energy {
+  if (!Number.isInteger(score) || score < 1 || score > 10 || !isText(note, 500)) throw new Error('Выбери настроение и проверь комментарий.')
+  return { id: id(), at: Date.now(), score, note: note.trim(), kind: 'mood' }
 }
 export function createIdea(title: string, text: string): Idea {
   if (!isText(title, 100, true) || !isText(text, 4000, true)) throw new Error('Добавь название и текст идеи.')

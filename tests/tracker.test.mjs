@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { GOAL, STORE_KEY, createHabit, charge, todayCount, newTracker, loadTracker, saveEnergy, createIdea, remainingAt, newFocus } from '../src/tracker.ts'
+import { GOAL, STORE_KEY, createHabit, charge, todayCount, newTracker, loadTracker, saveEnergy, saveMood, createIdea, remainingAt, newFocus } from '../src/tracker.ts'
 
 test('ХЭБ blocks only the current local day, can undo, and never passes 21', () => {
   const h = createHabit(' Бокс ', 'После работы', 3)
@@ -28,4 +28,20 @@ test('timer deadline survives a round trip; invalid storage is rejected', () => 
   assert.deepEqual(loaded.ideas, state.ideas)
   assert.throws(() => loadTracker({ getItem: () => '{bad' }))
   assert.throws(() => saveEnergy(11, ''))
+})
+
+test('new mood check-ins can share a diary with the old energy scale', () => {
+  const state = newTracker()
+  const previous = saveEnergy(1, 'Без сил')
+  const angry = saveMood(1, '  Много шума  ')
+  const happy = saveMood(10, '')
+  state.energy.push(happy, angry, previous)
+  assert.deepEqual(loadTracker({ getItem: () => JSON.stringify(state) }).energy, [
+    { ...happy, kind: 'mood', score: 10 },
+    { ...angry, kind: 'mood', score: 1, note: 'Много шума' },
+    { id: previous.id, at: previous.at, score: 1, note: 'Без сил' },
+  ])
+  assert.throws(() => saveMood(0, ''))
+  assert.throws(() => saveMood(11, ''))
+  assert.throws(() => saveMood(5, 'я'.repeat(501)))
 })

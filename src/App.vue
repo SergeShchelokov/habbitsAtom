@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Activity, Battery, Check, ChevronRight, Clock3, Grid2X2, Lightbulb, Pause, Play, Plus, RotateCcw, Trash2, Zap } from '@lucide/vue'
+import { Check, ChevronRight, Clock3, Grid2X2, Lightbulb, Pause, Play, Plus, RotateCcw, Smile, Trash2, Zap } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Bubble, BubbleContent, BubbleGroup } from '@/components/ui/bubble'
@@ -16,16 +16,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import FocusChip from '@/components/FocusChip.vue'
 import FocusDial from '@/components/FocusDial.vue'
-import MoodSlider from '@/components/MoodSlider.vue'
+import MoodPicker from '@/components/MoodPicker.vue'
 import VoiceNotes from '@/components/VoiceNotes.vue'
-import { energyColor, energyLabel } from '@/lib/mood'
-import { GOAL, MINUTES, STORE_KEY, charge, createHabit, createIdea, loadTracker, dayKey, newFocus, newTracker, remainingAt, saveEnergy, todayCount } from '@/tracker'
+import { CALM_MOOD, energyColor, energyLabel, moodByScore, type MoodScore } from '@/lib/mood'
+import { GOAL, MINUTES, STORE_KEY, charge, createHabit, createIdea, loadTracker, dayKey, newFocus, newTracker, remainingAt, saveMood, todayCount } from '@/tracker'
 import type { Habit, Minutes, Tracker } from '@/tracker'
 
 const sections = [
   { id:'habits', name:'Хэбы', icon:Grid2X2, eyebrow:'ЕЖЕДНЕВНЫЕ ПРИВЫЧКИ', description:'Один заряд за раз. Всего — двадцать один.' },
   { id:'focus', name:'Фокус', icon:Clock3, eyebrow:'ТАЙМЕР', description:'Выбери длительность и займись одним делом.' },
-  { id:'energy', name:'Энергия', icon:Activity, eyebrow:'ДНЕВНИК СОСТОЯНИЯ', description:'Отметь, как ты себя чувствуешь сейчас.' },
+  { id:'energy', name:'Энергия', icon:Zap, eyebrow:'ДНЕВНИК СОСТОЯНИЯ', description:'Отметь, как ты себя чувствуешь сейчас.' },
   { id:'ideas', name:'Идеи', icon:Lightbulb, eyebrow:'ЛИЧНЫЕ ЗАМЕТКИ', description:'Поймай сейчас. Разберёшь потом.' },
 ] as const
 const section = ref<typeof sections[number]['id']>('habits')
@@ -51,9 +51,8 @@ const filters = [
 const createOpen = ref(false)
 const deleteHabit = ref<Habit | null>(null)
 const name = ref(''), note = ref(''), dailyLimit = ref<1|2|3>(1)
-const energy = ref(5), energyNote = ref('')
+const mood = ref<MoodScore>(CALM_MOOD), energyNote = ref(''), energyCommentOpen = ref(false)
 const ideaTitle = ref(''), ideaText = ref('')
-const energyMood = computed(() => energyLabel(energy.value))
 const today = computed(() => dayKey(now.value))
 const todayEntries = computed(() => state.value.energy.filter(entry => dayKey(entry.at) === today.value).length)
 const remaining = computed(() => remainingAt(state.value.focus, now.value))
@@ -63,8 +62,6 @@ const finished = computed(() => state.value.focus.finished || remaining.value ==
 const timeText = computed(() => `${String(Math.floor(seconds.value / 60)).padStart(2,'0')}:${String(seconds.value % 60).padStart(2,'0')}`)
 const stamp = new Intl.DateTimeFormat('ru', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
 const last = (h: Habit) => h.charges.at(-1)
-const dayStamp = new Intl.DateTimeFormat('ru', { day:'numeric', month:'long' })
-const dateLabel = computed(() => dayStamp.format(now.value))
 
 function hydrate() {
   try { state.value = loadTracker(localStorage); storageError.value = '' }
@@ -160,7 +157,18 @@ function tick() {
     if (save(d => { if (d.focus.deadline === deadline) { d.focus = { ...d.focus, remaining:0, deadline:null, finished:true }; ended = true } }) && ended) { chime(); inform('Фокус завершён. Можно выдохнуть.') }
   }
 }
-function addEnergy() { if (save(d => { d.energy.unshift(saveEnergy(energy.value, energyNote.value)) })) { energyNote.value = ''; inform('Уровень энергии записан.') } }
+async function openEnergyComment() {
+  energyCommentOpen.value = true
+  await nextTick()
+  document.getElementById('energy-note')?.focus()
+}
+function addMood() {
+  if (save(d => { d.energy.unshift(saveMood(mood.value, energyNote.value)) })) {
+    energyNote.value = ''
+    energyCommentOpen.value = false
+    inform('Настроение записано.')
+  }
+}
 function addIdea() { if (save(d => { d.ideas.unshift(createIdea(ideaTitle.value, ideaText.value)) })) { ideaTitle.value = ''; ideaText.value = ''; inform('Идея на месте.') } }
 function storageChanged(event: StorageEvent) { if (event.key === STORE_KEY || event.key === null) hydrate() }
 onMounted(() => { hydrate(); tick(); ticker = window.setInterval(tick, 250); window.addEventListener('storage', storageChanged) })
@@ -185,7 +193,7 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
       <div class="rail-foot"><span aria-hidden="true" />Данные на устройстве</div>
     </aside>
 
-    <div class="workspace">
+    <div class="workspace" :class="{ 'workspace--energy': section === 'energy' }">
       <header class="workspace-bar">
         <div class="workspace-bar-inner">
           <Button type="button" variant="ghost" class="brand mobile-brand" aria-label=":21 — к хэбам" @click="go('habits')">
@@ -196,26 +204,26 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
           </div>
           <div class="workspace-actions">
             <FocusChip v-if="section !== 'focus' && running" :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" @click="go('focus', true)" />
-            <Button type="button" class="new-habit" aria-label="Новый хэб" @click="openCreate">
+            <span v-if="section === 'energy'" class="energy-mobile-label">Энергия</span>
+            <Button v-else type="button" class="new-habit" aria-label="Новый хэб" @click="openCreate">
               <Plus data-icon="inline-start" aria-hidden="true" /><span>Новый хэб</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main class="main-content">
-        <header class="page-header">
+      <main class="main-content" :class="{ 'main-content--energy': section === 'energy' }">
+        <header v-if="section !== 'energy'" class="page-header">
           <div>
             <p class="eyebrow">{{ currentPage.eyebrow }}</p>
             <h1 id="page-heading" ref="pageHeading" tabindex="-1">{{ currentPage.name }}</h1>
             <p class="page-description">{{ currentPage.description }}</p>
           </div>
-          <Badge v-if="section === 'energy'" variant="outline" class="date-badge hidden md:inline-flex">{{ dateLabel }}</Badge>
           <Badge v-if="section === 'habits'" variant="outline" class="date-badge hidden md:inline-flex">Цель · {{ GOAL }} заряд</Badge>
         </header>
 
         <p v-if="storageError" class="error" role="alert">{{ storageError }}</p>
-        <p v-if="formError && !createOpen && !deleteHabit" class="error" role="alert">{{ formError }}</p>
+        <p v-if="formError && !createOpen && !deleteHabit && section !== 'energy'" class="error" role="alert">{{ formError }}</p>
 
         <section v-if="section === 'habits'" aria-labelledby="page-heading">
           <div class="content-grid">
@@ -304,42 +312,32 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
           </Card>
         </section>
 
-        <section v-else-if="section === 'energy'" aria-labelledby="page-heading">
-          <div class="content-grid">
-            <Card class="panel energy-panel">
-              <CardHeader>
-                <CardTitle class="panel-title">Новая отметка</CardTitle>
-                <CardDescription>Сколько у тебя сил прямо сейчас?</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form class="energy-form" @submit.prevent="addEnergy">
-                  <div class="energy-meter" :style="{ '--selected-mood': energyColor(energy) }">
-                    <div class="score-line">
-                      <output class="score-value" aria-hidden="true">{{ energy }}<span> / 10</span></output>
-                      <Badge variant="outline" class="mood-badge"><span aria-hidden="true" />{{ energyMood }}</Badge>
-                    </div>
-                    <MoodSlider v-model="energy" />
-                  </div>
-                  <Field class="gap-2">
-                    <div class="field-top"><FieldLabel for="energy-note">Комментарий</FieldLabel><span>Необязательно</span></div>
-                    <Textarea id="energy-note" v-model="energyNote" maxlength="500" class="journal-textarea" aria-describedby="energy-count" placeholder="Что повлияло на заряд?" />
-                  </Field>
-                  <div class="form-foot">
-                    <span id="energy-count">{{ energyNote.length }} / 500</span>
-                    <Button type="submit" size="lg"><Check data-icon="inline-start" aria-hidden="true" />Записать</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-            <Card class="panel side-panel">
+        <section v-else-if="section === 'energy'" class="energy-layout" aria-labelledby="page-heading">
+            <form class="energy-checkin" @submit.prevent="addMood">
+              <h1 id="page-heading" ref="pageHeading" class="energy-question" tabindex="-1">Как ты сейчас?</h1>
+              <MoodPicker v-model="mood" />
+              <div class="energy-actions">
+                <Button v-if="!energyCommentOpen" type="button" variant="ghost" class="energy-comment-toggle" @click="openEnergyComment">
+                  <Plus data-icon="inline-start" aria-hidden="true" />Добавить комментарий
+                </Button>
+                <Field v-else class="energy-comment gap-2">
+                  <div class="field-top"><FieldLabel for="energy-note">Комментарий</FieldLabel><span>Необязательно</span></div>
+                  <Textarea id="energy-note" v-model="energyNote" maxlength="500" class="journal-textarea" aria-describedby="energy-count" placeholder="Что повлияло на настроение?" />
+                  <FieldDescription id="energy-count" class="text-right text-xs">{{ energyNote.length }} / 500</FieldDescription>
+                </Field>
+                <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+                <Button type="submit" size="lg" class="energy-submit">Записать настроение</Button>
+              </div>
+            </form>
+            <Card class="panel side-panel energy-history">
               <CardHeader>
                 <div class="panel-heading-row"><CardTitle class="panel-title">История</CardTitle><Badge variant="outline" class="counter-badge">Сегодня · {{ todayEntries }}</Badge></div>
-                <CardDescription>Отметки энергии и твои комментарии.</CardDescription>
+                <CardDescription>Твои отметки и комментарии.</CardDescription>
               </CardHeader>
               <CardContent>
                 <Empty v-if="!state.energy.length" class="empty-state">
                   <EmptyHeader>
-                    <EmptyMedia variant="icon"><Battery aria-hidden="true" /></EmptyMedia>
+                    <EmptyMedia variant="icon"><Smile aria-hidden="true" /></EmptyMedia>
                     <EmptyTitle>Пока без отметок</EmptyTitle><EmptyDescription>Первая запись появится здесь.</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -347,7 +345,8 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
                   <Bubble v-for="entry in state.energy" :key="entry.id" as="li" variant="muted" class="diary-bubble">
                     <BubbleContent class="diary-bubble-content">
                       <div class="entry-head">
-                        <span class="entry-score" :style="{ '--entry-mood': energyColor(entry.score) }"><span aria-hidden="true" />{{ entry.score }}/10 · {{ energyLabel(entry.score) }}</span>
+                        <span v-if="entry.kind === 'mood'" class="entry-score" :style="{ '--entry-mood': moodByScore(entry.score).color }"><span aria-hidden="true" />{{ moodByScore(entry.score).label }}</span>
+                        <span v-else class="entry-score" :style="{ '--entry-mood': energyColor(entry.score) }"><span aria-hidden="true" />{{ entry.score }}/10 · {{ energyLabel(entry.score) }}</span>
                         <time :datetime="new Date(entry.at).toISOString()">{{ stamp.format(entry.at) }}</time>
                       </div>
                       <p v-if="entry.note" class="entry-text">{{ entry.note }}</p>
@@ -356,7 +355,6 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
                 </BubbleGroup>
               </CardContent>
             </Card>
-          </div>
         </section>
 
         <section v-show="section === 'ideas'" aria-labelledby="page-heading">
