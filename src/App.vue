@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Activity, Check, Clock3, Pause, Play, Plus, Trash2, Zap } from '@lucide/vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Activity, Check, Pause, Play, Plus, Trash2, Zap } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import ChargeRing from '@/components/ChargeRing.vue'
+import FocusChip from '@/components/FocusChip.vue'
 import FocusDial from '@/components/FocusDial.vue'
 import { GOAL, MINUTES, STORE_KEY, charge, createHabit, createIdea, loadTracker, newFocus, newTracker, remainingAt, saveEnergy, todayCount } from '@/tracker'
 import type { Habit, Minutes, Tracker } from '@/tracker'
@@ -16,6 +17,7 @@ import type { Habit, Minutes, Tracker } from '@/tracker'
 const figma = import.meta.env.BASE_URL + 'assets/figma/'
 const sections = [{id:'habits',name:'Хэбы',asset:'grid.svg'},{id:'focus',name:'Фокус',asset:'focus.svg'},{id:'energy',name:'Энергия',asset:''},{id:'ideas',name:'Идеи',asset:'ideas.svg'}] as const
 const section = ref<typeof sections[number]['id']>('habits')
+const focusHeading = ref<HTMLHeadingElement | null>(null)
 const state = ref(newTracker())
 const storageError = ref('')
 const formError = ref('')
@@ -24,6 +26,8 @@ const toastMessage = ref('')
 let toastTimer: number | undefined
 let ticker: number | undefined
 let audio: AudioContext | undefined
+let navigationTransition: ViewTransition | undefined
+let navigationRevision = 0
 const active = computed(() => state.value.habits.filter(h => h.charges.length < GOAL))
 const completed = computed(() => state.value.habits.filter(h => h.charges.length === GOAL))
 const habitFilter = ref<'active'|'completed'>('active')
@@ -36,9 +40,10 @@ const ideaTitle = ref(''), ideaText = ref('')
 const energyValue = computed(() => energy.value[0] ?? 5)
 const energyMood = computed(() => energyValue.value <= 2 ? 'Батарейка на нуле' : energyValue.value <= 4 ? 'На спаде' : energyValue.value <= 6 ? 'Ровно' : energyValue.value <= 8 ? 'Хороший заряд' : 'Полон энергии')
 const remaining = computed(() => remainingAt(state.value.focus, now.value))
+const seconds = computed(() => Math.ceil(remaining.value / 1000))
 const running = computed(() => state.value.focus.deadline !== null && remaining.value > 0)
 const finished = computed(() => state.value.focus.finished || remaining.value === 0)
-const timeText = computed(() => { const s = Math.ceil(remaining.value / 1000); return `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}` })
+const timeText = computed(() => `${String(Math.floor(seconds.value / 60)).padStart(2,'0')}:${String(seconds.value % 60).padStart(2,'0')}`)
 const stamp = new Intl.DateTimeFormat('ru', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
 const last = (h: Habit) => h.charges.at(-1)
 const coin = import.meta.env.BASE_URL + 'assets/empty-coin.png'
@@ -67,7 +72,29 @@ function inform(message: string) {
   window.clearTimeout(toastTimer)
   toastTimer = window.setTimeout(() => { toastMessage.value = '' }, 4500)
 }
-function go(next: typeof section.value) { section.value = next; formError.value = '' }
+function go(next: typeof section.value, focusTitle = false) {
+  formError.value = ''
+  const revision = ++navigationRevision
+  const interrupted = navigationTransition
+  interrupted?.skipTransition()
+  const update = async () => {
+    if (revision !== navigationRevision) return
+    section.value = next
+    await nextTick()
+    if (focusTitle && revision === navigationRevision) focusHeading.value?.focus()
+  }
+
+  // Switch both views in one capture while keeping the existing timer state.
+  if (!interrupted && next !== section.value && (next === 'focus' || section.value === 'focus')
+    && running.value && remaining.value > 1000 && typeof document.startViewTransition === 'function'
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const transition = document.startViewTransition(update)
+    navigationTransition = transition
+    void transition.finished.finally(() => {
+      if (navigationTransition === transition) navigationTransition = undefined
+    }).catch(() => {})
+  } else void update()
+}
 function openCreate() { name.value = ''; note.value = ''; dailyLimit.value = 1; formError.value = ''; createOpen.value = true }
 function addHabit() {
   if (!save(d => d.habits.unshift(createHabit(name.value, note.value, dailyLimit.value)))) return
@@ -116,7 +143,7 @@ function addEnergy() { if (save(d => { d.energy.unshift(saveEnergy(energyValue.v
 function addIdea() { if (save(d => { d.ideas.unshift(createIdea(ideaTitle.value, ideaText.value)) })) { ideaTitle.value = ''; ideaText.value = ''; inform('Идея на месте.') } }
 function storageChanged(event: StorageEvent) { if (event.key === STORE_KEY || event.key === null) hydrate() }
 onMounted(() => { hydrate(); tick(); ticker = window.setInterval(tick, 250); window.addEventListener('storage', storageChanged) })
-onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastTimer); window.removeEventListener('storage', storageChanged); if (audio) void audio.close().catch(() => {}) })
+onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransition(); window.clearInterval(ticker); window.clearTimeout(toastTimer); window.removeEventListener('storage', storageChanged); if (audio) void audio.close().catch(() => {}) })
 </script>
 
 <template>
@@ -129,7 +156,11 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
       </nav>
     </aside>
     <main :class="['main-content', { 'is-focus': section === 'focus' }]">
-      <div v-if="section !== 'focus'" class="top-line"><span>ЛИЧНОЕ ПРОСТРАНСТВО</span><Button v-if="state.focus.deadline !== null" variant="outline" class="rounded-full tabular-nums" @click="go('focus')"><Clock3 aria-hidden="true"/>{{ timeText }}</Button><Badge v-else variant="outline" class="rounded-full text-muted-foreground">На этом устройстве</Badge></div>
+      <header v-if="section !== 'focus'" class="top-line">
+        <span>ЛИЧНОЕ ПРОСТРАНСТВО</span>
+        <FocusChip v-if="running" :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" @click="go('focus', true)" />
+        <Badge v-else variant="outline" class="rounded-full text-muted-foreground">На этом устройстве</Badge>
+      </header>
       <p v-if="storageError" class="error" role="alert">{{ storageError }}</p>
       <p v-if="formError && !createOpen && !deleteHabit" class="error" role="alert">{{ formError }}</p>
 
@@ -162,10 +193,10 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
 
       <section v-else-if="section === 'focus'" aria-labelledby="focus-heading">
         <nav class="focus-breadcrumb" aria-label="Путь"><button type="button" @click="go('habits')">Хэбы</button><span aria-hidden="true">/</span><span aria-current="page">Фокус</span></nav>
-        <header class="page-header focus-heading"><div><h1 id="focus-heading">Фокус на {{ state.focus.minutes }} минут</h1></div></header>
+        <header class="page-header focus-heading"><div><h1 id="focus-heading" ref="focusHeading" tabindex="-1">Фокус на {{ state.focus.minutes }} минут</h1></div></header>
         <div class="focus-stage">
           <div v-if="!running" class="segmented focus-presets" aria-label="Длительность"><Button v-for="m in MINUTES" :key="m" :variant="m === state.focus.minutes ? 'secondary' : 'ghost'" :aria-pressed="m === state.focus.minutes" @click="chooseMinutes(m)">{{ m }} мин</Button></div>
-          <FocusDial :remaining="Math.ceil(remaining / 1000)" :total="state.focus.minutes * 60" :text="timeText" :state="finished ? 'ГОТОВО' : running ? 'В ФОКУСЕ' : remaining < state.focus.minutes * 60_000 ? 'НА ПАУЗЕ' : 'ФОКУС'" :caption="`из ${state.focus.minutes}:00`"/>
+          <FocusDial :remaining="seconds" :total="state.focus.minutes * 60" :text="timeText" :state="finished ? 'ГОТОВО' : running ? 'В ФОКУСЕ' : remaining < state.focus.minutes * 60_000 ? 'НА ПАУЗЕ' : 'ФОКУС'" :caption="`из ${state.focus.minutes}:00`"/>
           <div class="focus-actions"><Button class="focus-primary" @click="toggleTimer"><Pause v-if="running" fill="currentColor" aria-hidden="true"/><Play v-else fill="currentColor" aria-hidden="true"/>{{ running ? 'Пауза' : finished ? 'Начать заново' : remaining < state.focus.minutes * 60_000 ? 'Продолжить' : 'Начать' }}</Button><Button v-if="!running && remaining < state.focus.minutes * 60_000" variant="ghost" class="text-muted-foreground" @click="chooseMinutes(state.focus.minutes)">Сбросить</Button></div>
         </div>
       </section>

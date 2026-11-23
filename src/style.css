@@ -239,6 +239,26 @@ button[data-slot='button'] { min-height: 2.5rem; }
 .focus-dial-copy strong { font-size:24cqw; font-weight:400; line-height:1; letter-spacing:-.035em; font-variant-numeric:tabular-nums; }
 .focus-dial-copy small { font-size:5.5cqw; color:#a29fa3; }
 .focus-arc { filter:drop-shadow(0 0 7px #ffd4534d); }
+.top-line .focus-chip {
+  display:inline-flex; flex:none; align-items:center; gap:8px; height:44px; min-width:138px;
+  padding-inline:11px; border:1px solid #51473a; border-radius:999px;
+  background:#292521; color:#ffe28c; box-shadow:none;
+}
+.top-line .focus-chip:hover { border-color:#9a824e; background:#332c22; color:#ffe28c; }
+.top-line .focus-chip:focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+.focus-chip svg.focus-chip-ring { width:27px; height:27px; }
+.focus-chip-time { font-size:20px; line-height:1; font-weight:500; letter-spacing:-.025em; font-variant-numeric:tabular-nums; }
+.focus-chip svg.focus-chip-arrow { width:16px; height:16px; margin-inline-start:auto; color:#bbad94; }
+.focus-chip-arc { transition:stroke-dashoffset 350ms ease-out; }
+
+.focus-dial > svg, .focus-chip-ring { view-transition-name:focus-ring; }
+.focus-dial-copy strong, .focus-chip-time { view-transition-name:focus-time; }
+::view-transition-old(root) { animation:none; opacity:0; }
+::view-transition-new(root) { animation:none; }
+::view-transition-group(focus-ring), ::view-transition-group(focus-time) {
+  animation-duration:820ms; animation-timing-function:cubic-bezier(.24,.75,.28,1);
+}
+@media (prefers-reduced-motion:reduce) { .focus-chip-arc { transition:none; } }
 .focus-actions { display:flex; flex-direction:column; align-items:center; gap:.4rem; }
 .focus-actions .focus-primary { min-height:61px; width:220px; border-radius:999px; background:var(--brand-gradient); color:#201e21; font-size:1.375rem; font-weight:650; gap:14px; }
 button[data-slot='button'][data-variant='default']:not(:disabled) { background:var(--brand-gradient); }
@@ -257,6 +277,10 @@ button[data-slot='button'][data-variant='default']:not(:disabled) { background:v
   .nav-list .nav-link .nav-icon { width:22px; height:23px; overflow:visible; }
   .nav-list .nav-link .nav-icon :is(img,svg) { flex:none; transform:scale(.62); max-width:none; }
   .main-content { padding:20px 18px 56px; }
+  .top-line .focus-chip { min-width:116px; gap:6px; padding-inline:9px; }
+  .focus-chip svg.focus-chip-ring { width:22px; height:22px; }
+  .focus-chip-time { font-size:18px; }
+  .focus-chip svg.focus-chip-arrow { width:14px; height:14px; }
   .focus-stage { padding-inline-start:0; }
   .focus-dial { width:min(93%,360px,47vh); }
   .focus-actions .focus-primary { min-height:52px; font-size:1.125rem; }
