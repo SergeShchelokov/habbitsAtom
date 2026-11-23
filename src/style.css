@@ -211,6 +211,7 @@
   align-items: start;
   gap: 18px;
 }
+.ideas-compose { display: grid; min-width: 0; gap: inherit; }
 .panel { min-width: 0; gap: 18px; padding-block: 21px; --panel-padding: 22px; }
 .panel > :is([data-slot="card-header"], [data-slot="card-content"]) { padding-inline: var(--panel-padding); }
 .panel-title { font-size: 1.11rem; font-weight: 660; letter-spacing: -.017em; }

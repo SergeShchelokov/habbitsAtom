@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import FocusChip from '@/components/FocusChip.vue'
 import FocusDial from '@/components/FocusDial.vue'
 import MoodSlider from '@/components/MoodSlider.vue'
+import VoiceNotes from '@/components/VoiceNotes.vue'
 import { energyColor, energyLabel } from '@/lib/mood'
 import { GOAL, MINUTES, STORE_KEY, charge, createHabit, createIdea, loadTracker, dayKey, newFocus, newTracker, remainingAt, saveEnergy, todayCount } from '@/tracker'
 import type { Habit, Minutes, Tracker } from '@/tracker'
@@ -358,23 +359,26 @@ onBeforeUnmount(() => { ++navigationRevision; navigationTransition?.skipTransiti
           </div>
         </section>
 
-        <section v-else aria-labelledby="page-heading">
+        <section v-show="section === 'ideas'" aria-labelledby="page-heading">
           <div class="content-grid">
-            <Card class="panel">
-              <CardHeader>
-                <CardTitle class="panel-title">Новая идея</CardTitle>
-                <CardDescription>Пары строк достаточно, чтобы не забыть замысел.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form class="form-stack" @submit.prevent="addIdea">
-                  <FieldGroup class="gap-4">
-                    <Field class="gap-2"><FieldLabel for="idea-title">Название</FieldLabel><Input id="idea-title" v-model="ideaTitle" required maxlength="100" placeholder="О чём идея?" /></Field>
-                    <Field class="gap-2"><FieldLabel for="idea-text">Текст</FieldLabel><Textarea id="idea-text" v-model="ideaText" required maxlength="4000" aria-describedby="idea-count" class="journal-textarea" placeholder="Запиши, пока не улетела" /></Field>
-                  </FieldGroup>
-                  <div class="form-foot"><span id="idea-count">{{ ideaText.length }} / 4000</span><Button type="submit" size="lg">Сохранить идею</Button></div>
-                </form>
-              </CardContent>
-            </Card>
+            <div class="ideas-compose">
+              <VoiceNotes :active="section === 'ideas'" />
+              <Card class="panel">
+                <CardHeader>
+                  <CardTitle class="panel-title">Новая идея</CardTitle>
+                  <CardDescription>Пары строк достаточно, чтобы не забыть замысел.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form class="form-stack" @submit.prevent="addIdea">
+                    <FieldGroup class="gap-4">
+                      <Field class="gap-2"><FieldLabel for="idea-title">Название</FieldLabel><Input id="idea-title" v-model="ideaTitle" required maxlength="100" placeholder="О чём идея?" /></Field>
+                      <Field class="gap-2"><FieldLabel for="idea-text">Текст</FieldLabel><Textarea id="idea-text" v-model="ideaText" required maxlength="4000" aria-describedby="idea-count" class="journal-textarea" placeholder="Запиши, пока не улетела" /></Field>
+                    </FieldGroup>
+                    <div class="form-foot"><span id="idea-count">{{ ideaText.length }} / 4000</span><Button type="submit" size="lg">Сохранить идею</Button></div>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
             <Card class="panel side-panel">
               <CardHeader>
                 <div class="panel-heading-row"><CardTitle class="panel-title">Сохранённые идеи</CardTitle><Badge variant="outline" class="counter-badge">{{ state.ideas.length }}</Badge></div>
